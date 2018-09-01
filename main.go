@@ -3,11 +3,15 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"os/user"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 type config struct {
@@ -18,25 +22,34 @@ type config struct {
 	TTLSeconds int
 }
 
-var configFileName = ".proxy-manager.json"
+var configFileName = "ewp-config.json"
 var delim = byte('\n')
 var configs = make(map[int]config)
 var stdin = bufio.NewReader(os.Stdin)
+var create = flag.Bool("c", false, "create a new config")
+var help = flag.Bool("h", false, "show this help")
 
 func main() {
-	c := config{}
-	c.ProxyUser = readString("Proxy User (optional): ")
-	c.ProxyHost = readString("Proxy Host: ")
-	c.ProxyPort = readInt("Proxy Port (80): ", 80)
-	c.Default = readBool("Default proxy (y/N): ", false)
-	c.TTLSeconds = readInt("TTL in seconds (optional): ", 0)
-	writeConfigToFile(c)
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	if *create {
+		c := createConfigFromStdin()
+		writeConfigToFile(c)
+		os.Exit(0)
+	}
+
+	execCommand()
 }
 
-func readString(prompt string) string {
+func readStringFromStdin(prompt string) string {
 	fmt.Print(prompt)
-	s, err := stdin.ReadString(delim)
 
+	s, err := stdin.ReadString(delim)
 	if err != nil {
 		panic(err)
 	}
@@ -44,15 +57,13 @@ func readString(prompt string) string {
 	return strings.Replace(s, "\n", "", -1)
 }
 
-func readInt(prompt string, d int) int {
-	s := readString(prompt)
-
+func readIntFromStdin(prompt string, d int) int {
+	s := readStringFromStdin(prompt)
 	if len(s) == 0 {
 		return d
 	}
 
 	i, err := strconv.Atoi(s)
-
 	if err != nil {
 		panic(err)
 	}
@@ -60,9 +71,8 @@ func readInt(prompt string, d int) int {
 	return i
 }
 
-func readBool(prompt string, d bool) bool {
-	s := readString(prompt)
-
+func readBoolFromStdin(prompt string, d bool) bool {
+	s := readStringFromStdin(prompt)
 	if len(s) == 0 {
 		return d
 	}
@@ -81,7 +91,7 @@ func getHomeDirectory() string {
 }
 
 func writeConfigToFile(c config) {
-	f, err := os.Create("proxy-manager.json")
+	f, err := os.Create(configFileName)
 	defer f.Close()
 	j, err := json.Marshal(c)
 	f.Write(j)
@@ -90,4 +100,59 @@ func writeConfigToFile(c config) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func createConfigFromStdin() config {
+	c := config{}
+	c.ProxyUser = readStringFromStdin("Proxy User (optional): ")
+	c.ProxyHost = readStringFromStdin("Proxy Host: ")
+	c.ProxyPort = readIntFromStdin("Proxy Port (80): ", 80)
+	c.Default = readBoolFromStdin("Default proxy (y/N): ", false)
+	c.TTLSeconds = readIntFromStdin("TTL in seconds (optional): ", 0)
+
+	return c
+}
+
+func readConfigFromFile() config {
+	d, err := ioutil.ReadFile(configFileName)
+	if err != nil {
+		fmt.Printf("No %s file found, please create one first\n", configFileName)
+		os.Exit(0)
+	}
+
+	c := new(config)
+	err = json.Unmarshal(d, c)
+	if err != nil {
+		panic(err)
+	}
+
+	return *c
+}
+
+func setEnvironment() {
+	c := readConfigFromFile()
+	var p string
+
+	if len(c.ProxyUser) > 0 {
+		p = c.ProxyUser
+	}
+
+	p = p + "@" + c.ProxyHost + ":" + fmt.Sprint(c.ProxyPort)
+
+	os.Setenv("HTTP_PROXY", p)
+	os.Setenv("HTTPS_PROXY", p)
+}
+
+func execCommand() {
+	setEnvironment()
+	args := flag.Args()
+	if len(args) == 0 {
+		return
+	}
+	exec, err := exec.LookPath(args[0])
+	if err != nil {
+		panic(err)
+	}
+	env := os.Environ()
+	syscall.Exec(exec, args, env)
 }
