@@ -129,7 +129,7 @@ func readConfigFromFile() config {
 	return *c
 }
 
-func setEnvironment() {
+func setEnvironment(password string) {
 	c := readConfigFromFile()
 	var p string
 
@@ -137,14 +137,23 @@ func setEnvironment() {
 		p = c.ProxyUser
 	}
 
-	p = p + "@" + c.ProxyHost + ":" + fmt.Sprint(c.ProxyPort)
+	if len(p) > 0 && len(password) > 0 {
+		p += ":" + password
+	}
+
+	if len(p) > 0 {
+		p += "@"
+	}
+
+	p += c.ProxyHost + ":" + fmt.Sprint(c.ProxyPort)
 
 	os.Setenv("HTTP_PROXY", p)
 	os.Setenv("HTTPS_PROXY", p)
 }
 
 func execCommand() {
-	setEnvironment()
+	password := readStringFromStdin("Proxy password (optional): ")
+	setEnvironment(password)
 	args := flag.Args()
 	if len(args) == 0 {
 		return
