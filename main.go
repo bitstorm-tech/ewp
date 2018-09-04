@@ -22,14 +22,14 @@ type config struct {
 	TTLSeconds int
 }
 
-var configFileName = "ewp-config.json"
-var delim = byte('\n')
-var configs = make(map[int]config)
+var configFileName = ".ewp-config.json"
+var deliminator = byte('\n')
 var stdin = bufio.NewReader(os.Stdin)
 var create = flag.Bool("c", false, "create a new config")
 var help = flag.Bool("h", false, "show this help")
 
 func main() {
+	configFileName = getHomeDirectory() + "/" + configFileName
 	flag.Parse()
 
 	if *help {
@@ -49,7 +49,7 @@ func main() {
 func readStringFromStdin(prompt string) string {
 	fmt.Print(prompt)
 
-	s, err := stdin.ReadString(delim)
+	s, err := stdin.ReadString(deliminator)
 	if err != nil {
 		panic(err)
 	}
@@ -113,7 +113,7 @@ func createConfigFromStdin() config {
 	return c
 }
 
-func readConfigFromFile() config {
+func readConfigFromFile() *config {
 	d, err := ioutil.ReadFile(configFileName)
 	if err != nil {
 		fmt.Printf("No %s file found, please create one first\n", configFileName)
@@ -126,11 +126,12 @@ func readConfigFromFile() config {
 		panic(err)
 	}
 
-	return *c
+	return c
 }
 
 func setEnvironment(password string) {
 	c := readConfigFromFile()
+
 	var p string
 
 	if len(c.ProxyUser) > 0 {
@@ -158,10 +159,10 @@ func execCommand() {
 	if len(args) == 0 {
 		return
 	}
-	exec, err := exec.LookPath(args[0])
+	exe, err := exec.LookPath(args[0])
 	if err != nil {
 		panic(err)
 	}
 	env := os.Environ()
-	syscall.Exec(exec, args, env)
+	syscall.Exec(exe, args, env)
 }

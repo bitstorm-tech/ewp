@@ -1,1 +1,1 @@
-module manage-proxy
+module github.com/bugjoe/ewp
