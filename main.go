@@ -26,6 +26,7 @@ var configFileName = ".ewp-config.json"
 var deliminator = byte('\n')
 var stdin = bufio.NewReader(os.Stdin)
 var create = flag.Bool("c", false, "create a new config")
+var show = flag.Bool("s", false, "show config file")
 var help = flag.Bool("h", false, "show this help")
 
 func main() {
@@ -34,6 +35,12 @@ func main() {
 
 	if *help {
 		flag.Usage()
+		os.Exit(0)
+	}
+
+	if *show {
+		bytes := readConfigFromFileToByteArray()
+		fmt.Println(string(bytes))
 		os.Exit(0)
 	}
 
@@ -93,7 +100,7 @@ func getHomeDirectory() string {
 func writeConfigToFile(c config) {
 	f, err := os.Create(configFileName)
 	defer f.Close()
-	j, err := json.Marshal(c)
+	j, err := json.MarshalIndent(c, "", "\t")
 	f.Write(j)
 	f.Sync()
 
@@ -114,19 +121,25 @@ func createConfigFromStdin() config {
 }
 
 func readConfigFromFile() *config {
-	d, err := ioutil.ReadFile(configFileName)
-	if err != nil {
-		fmt.Printf("No %s file found, please create one first\n", configFileName)
-		os.Exit(0)
-	}
+	bytes := readConfigFromFileToByteArray()
 
 	c := new(config)
-	err = json.Unmarshal(d, c)
+	err := json.Unmarshal(bytes, c)
 	if err != nil {
 		panic(err)
 	}
 
 	return c
+}
+
+func readConfigFromFileToByteArray() []byte {
+	bytes, err := ioutil.ReadFile(configFileName)
+	if err != nil {
+		fmt.Printf("No %s file found, please create one first\n", configFileName)
+		os.Exit(0)
+	}
+
+	return bytes
 }
 
 func setEnvironment(password string) {
